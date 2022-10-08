@@ -1,5 +1,5 @@
 import React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Contract } from "@ethersproject/contracts";
 import { abis } from "@my-app/contracts";
 import {
@@ -25,28 +25,139 @@ import {
 } from "../utils/helpers";
 
 const Exchange = ({ pools }) => {
-  const isApproving = isOperationPending("approve"); // TODO
-  const isSwapping = isOperationPending("swap"); // TODO
+  const { account } = useEthers();
+  const [fromValue, setFromValue] = useState("0.0");
+  const [fromToken, setFromToken] = useState(pools[0].token0Address);
+  const [toToken, setToToken] = useState("");
+  const [resetState, setResetState] = useState(false);
 
-  // const successMessge = getSuccessMessage(); // TODO
-  // const failureMessge = getFailureMessage(); // TODO
+  const fromValueBigNumber = parseUnits(fromValue);
+
+  const availableTokens = getAvailableTokens(pools);
+  const counterpartTokens = getCounterpartTokens(pools, fromToken);
+  const pairAddress =
+    findPoolByTokens(pools, fromToken, toToken)?.address ?? "";
+
+  const routerContract = new Contract(ROUTER_ADDRESS, abis.router02);
+  const fromTokenContract = new Contract(fromToken, ERC20.abi);
+  const fromTokenBalance = useTokenBalance(fromToken, account);
+  const toTokenBalance = useTokenBalance(toToken, account);
+  const tokenAllowance =
+    useTokenAllowance(fromToken, account, ROUTER_ADDRESS) || parseUnits("0");
+  const approvedNeeded = fromValueBigNumber.gt(tokenAllowance);
+  const fromValueIsGreatThan0 = fromValueBigNumber.gt(parseUnits("0"));
+  const hasEnoughBalance = fromValueBigNumber.lte(
+    fromTokenBalance ?? parseUnits("0")
+  );
+
+  const { state: swapApproveState, send: swapApproveSend } =
+    useContractFunction(fromTokenContract, "approve", {
+      transactionName: "onApproveRequested",
+      gasLimitBufferPercentage: 10,
+    });
+
+  const { state: swapExecuteState, send: swapExecuteSend } =
+    useContractFunction(routerContract, "swapExactTokensForTokens", {
+      transactionName: "swapExactTokensForTokens",
+      gasLimitBufferPercentage: 10,
+    });
+
+  const isApproving = isOperationPending(swapApproveState);
+  const isSwapping = isOperationPending(swapExecuteSend);
+  const canApprove = !isApproving && approvedNeeded;
+  const canSwap =
+    !approvedNeeded && !isSwapping && fromValueIsGreatThan0 && hasEnoughBalance;
+
+  const successMessage = getSuccessMessage(swapApproveSend, swapExecuteState);
+  const failureMessage = getFailureMessage(swapApproveState, swapExecuteState);
+
+  const onApproveRequested = () => {
+    swapApproveSend(ROUTER_ADDRESS, ethers.constants.MaxUint256);
+  };
+
+  // uint amountIn
+  // uint amountOutMin
+  // address[] calldata path,
+  // address to
+  // uint deadline
+  const onSwapRequested = () => {
+    swapExecuteSend(
+      fromValueBigNumber,
+      0,
+      [fromToken, toToken],
+      account,
+      Math.floor(Date.now() / 1000) + 60 * 2
+    ).then(() => {
+      setFromValue("0");
+    });
+  };
+
+  const onFromValueChange = (value) => {
+    const trimmedValue = value.trim();
+    try {
+      if (trimmedValue) {
+        parseUnits(value);
+        setFromValue(value);
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const onFromTokenChange = (value) => {
+    setFromToken(value);
+  };
+  const onToTokenChange = (value) => {
+    setToToken(value);
+  };
+
+  useEffect(() => {
+    if (failureMessage || successMessage) {
+      setTimeout(() => {
+        setResetState(true);
+        setFromValue("");
+        setToToken("");
+      }, 5000);
+    }
+  }, [failureMessage, successMessage]);
+  // console.log(`-----------------`);
+  // console.log(`fromToken is ${fromToken}`);
+  // console.log(`account is ${account}`);
+  // console.log(`fromTokenBalance is ${fromTokenBalance}`);
+  // console.log(`toTokenBalance is ${toTokenBalance}`);
+  // console.log(`-----------------`);
   return (
     <div className="flex flex-col w-full items-enter">
       <div className="mb-8">
-        <AmountIn />
-        <Balance />
+        <AmountIn
+          value={fromValue}
+          onChange={onFromValueChange}
+          currencyValue={fromToken}
+          onSelect={onFromTokenChange}
+          currencies={availableTokens}
+          isSwapping={isSwapping && hasEnoughBalance}
+        />
+        <Balance tokenBalance={fromTokenBalance} />
       </div>
       <div className="mb-8 w-[100%]">
-        <AmountOut />
-        <Balance />
+        <AmountOut
+          fromToken={fromToken}
+          toToken={toToken}
+          amountIn={fromValueBigNumber}
+          pairContract={pairAddress}
+          currencyValue={toToken}
+          onSelect={onToTokenChange}
+          currencies={counterpartTokens}
+        />
+        <Balance tokenBalance={toTokenBalance} />
       </div>
-      {"approveNeeded" && !isSwapping ? (
+      {approvedNeeded && !isSwapping ? (
         <button
-          disabled={!"canApprove"}
-          onClick={() => {}}
+          disabled={!canApprove}
+          onClick={onApproveRequested}
           className={`
           ${
-            "canApprove"
+            canApprove
               ? "bg-site-pink text-white"
               : "bg-site-dim2 text-site-dim2"
           } ${styles.actionButton}
@@ -56,28 +167,26 @@ const Exchange = ({ pools }) => {
         </button>
       ) : (
         <button
-          disabled={!"canSwap"}
-          onClick={() => {}}
+          disabled={!canSwap}
+          onClick={onSwapRequested}
           className={`
           ${
-            "canSwap"
-              ? "bg-site-pink text-white"
-              : "bg-site-dim2 text-site-dim2"
+            canSwap ? "bg-site-pink text-white" : "bg-site-dim2 text-site-dim2"
           } ${styles.actionButton}
           `}
         >
           {isSwapping
             ? "Swapping..."
-            : "hasEnoughBalance"
+            : hasEnoughBalance
             ? "Swap"
             : "Insufficient balance"}
         </button>
       )}
 
-      {"failureMessge" && !"resetState" ? (
-        <p className={styles.message}>{"failureMessge"}</p>
-      ) : "successMessage" ? (
-        <p className={styles.message}>{"successMessage"}</p>
+      {failureMessage && !resetState ? (
+        <p className={styles.message}>{failureMessage}</p>
+      ) : successMessage ? (
+        <p className={styles.message}>{successMessage}</p>
       ) : (
         ""
       )}

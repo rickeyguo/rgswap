@@ -3,16 +3,38 @@ import { chevronDown } from "../assets";
 import styles from "../styles";
 import { useOnClickOutside } from "../utils";
 
-function AmountIn() {
+function AmountIn({
+  value,
+  onChange,
+  currencyValue,
+  onSelect,
+  currencies,
+  isSwapping,
+}) {
   const [showList, setShowList] = useState(false);
+  const [activeCurrency, setActiveCurrency] = useState("Select");
+  const ref = useRef();
+
+  useOnClickOutside(ref, () => setShowList(false));
+
+  useEffect(() => {
+    if (Object.keys(currencies).includes(currencyValue)) {
+      setActiveCurrency(currencies[currencyValue]);
+    } else {
+      setActiveCurrency("Select");
+    }
+  }, [currencies, currencyValue]);
   return (
     <div className={styles.amountContainer}>
       <input
-        placeholder="0.0"
+        placeholder=""
         type="number"
-        value=""
-        disabled={false}
-        onChange={() => {}}
+        value={value}
+        disabled={isSwapping}
+        onChange={(e) => {
+          typeof onChange === "function" && onChange(e.target.value);
+          // setTokenVal(e.target.value);
+        }}
         className={styles.amountInput}
       />
       <div
@@ -22,7 +44,7 @@ function AmountIn() {
         }}
       >
         <button className={styles.currencyButton}>
-          {"ETH"}
+          {activeCurrency}
           <img
             src={chevronDown}
             alt="chevron down"
@@ -31,18 +53,19 @@ function AmountIn() {
             }`}
           />
         </button>
-
         {showList && (
-          <ul className={styles.currencyList}>
-            {[
-              { token: "ETH", tokenName: "ETH" },
-              { token: "RG Gold", tokenName: "RG Gold" },
-            ].map(({ token, tokenName }, index) => (
+          <ul ref={ref} className={styles.currencyList}>
+            {Object.entries(currencies).map(([token, tokenName], index) => (
               <li
                 key={index}
                 className={`${styles.currencyListItem} ${
-                  true ? "bg-site-dim2" : ""
+                  activeCurrency === tokenName ? "bg-site-dim2" : ""
                 } cursor-pointer`}
+                onClick={() => {
+                  if (typeof onSelect === "function") onSelect(token);
+                  setActiveCurrency(tokenName);
+                  setShowList(false);
+                }}
               >
                 {tokenName}
               </li>
