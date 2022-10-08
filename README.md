@@ -1,3 +1,13 @@
+Require creating your own ERC-20 tokens on the Goerli testnet and get eth from https://goerlifaucet.com to pay for the gas fees.
+
+
+![rgswap-1](https://user-images.githubusercontent.com/32823151/194690234-97659525-98c7-4ab4-aa27-bfc5e2a03592.jpg)
+![rgswap-2](https://user-images.githubusercontent.com/32823151/194690235-c1e3b3b1-0fad-4c60-9d3e-38b430f15681.jpg)
+![rgswap-3](https://user-images.githubusercontent.com/32823151/194690236-db49567c-da43-4b9a-b729-94a969cbaa35.jpg)
+![rgswap-4](https://user-images.githubusercontent.com/32823151/194690237-3b6ebc85-8b97-4bcf-9bd3-c8a4814dc51e.jpg)
+![rgswap-5](https://user-images.githubusercontent.com/32823151/194690238-77b3d719-2bcc-4f42-95fe-bcc3c5d9eb09.jpg)
+
+
 This project was bootstrapped with [Create Eth App](https://github.com/paulrberg/create-eth-app).
 
 ## Project Structure
